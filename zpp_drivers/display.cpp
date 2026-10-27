@@ -150,24 +150,23 @@ uint32_t Display::get_height() const {
   return _lcd_ysize;
 }
 
-void Display::fill_display(Color color) {
+void Display::fill_display(Rgb color) {
   fill_rectangle(color, 0, 0, _lcd_xsize, _lcd_ysize);
   display_blanking_off(_display_device);
 }
 
-void Display::set_background_color(Color color) {
-  _background_color       = color;
-  _background_color_value = get_color_value(_background_color);
+void Display::set_background_color(Rgb color) {
+  _background_color_value = color.argb();
 }
 
 // width, height is the standard order for image
 // dimensions, and we always call this function with width first, then height
-void Display::fill_rectangle(Color color,
+void Display::fill_rectangle(Rgb color,
                              uint32_t x_pos,
                              uint32_t y_pos,  // NOLINT(bugprone-easily-swappable-parameters)
                              uint32_t width,  // NOLINT(bugprone-easily-swappable-parameters)
                              uint32_t height) {
-  uint32_t color_value = get_color_value(color);
+  uint32_t color_value = color.argb();
   // ZPP_LOG_DBG("Fill rectangle with color 0x%08x starting at (%d, %d) - (width %d,
   // height %d)",
   //        color_value,
@@ -200,7 +199,7 @@ void Display::fill_rectangle(Color color,
   }
 }
 
-void Display::draw_vertical_line(Color color, uint32_t x_pos, uint32_t y_pos, uint32_t line_length, uint32_t thickness) {
+void Display::draw_vertical_line(Rgb color, uint32_t x_pos, uint32_t y_pos, uint32_t line_length, uint32_t thickness) {
   // ZPP_LOG_DBG("Fill rectangle with color 0x%08x starting at (%d, %d) - (width %d,
   // height %d)",
   //        static_cast<uint32_t>(color),
@@ -213,7 +212,7 @@ void Display::draw_vertical_line(Color color, uint32_t x_pos, uint32_t y_pos, ui
   fill_rectangle(color, x_pos, y_pos, thickness, line_length);
 }
 
-void Display::draw_horizontal_line(Color color, uint32_t x_pos, uint32_t y_pos, uint32_t line_length, uint32_t thickness) {
+void Display::draw_horizontal_line(Rgb color, uint32_t x_pos, uint32_t y_pos, uint32_t line_length, uint32_t thickness) {
   // ZPP_LOG_DBG("Fill rectangle with color 0x%08x starting at (%d, %d) - (width %d,
   // height %d)",
   //        static_cast<uint32_t>(color),
@@ -274,7 +273,7 @@ uint16_t Display::get_string_width(const std::string& text) const {
   return string_width;
 }
 
-void Display::draw_string_at_line(Color color, uint32_t line, const std::string& text, AlignMode mode) {
+void Display::draw_string_at_line(Rgb color, uint32_t line, const std::string& text, AlignMode mode) {
   uint16_t nbr_of_pixels = get_string_width(text);
   uint32_t x_pos         = 0;
   switch (mode) {
@@ -297,8 +296,9 @@ void Display::draw_string_at_line(Color color, uint32_t line, const std::string&
 }
 
 // NOLINTNEXTLINE(build/include_what_you_use) - false positive (string is included in the header)
-void Display::draw_string_at(Color color, uint32_t x_pos, uint32_t y_pos, const std::string& text) {
+void Display::draw_string_at(Rgb color, uint32_t x_pos, uint32_t y_pos, const std::string& text) {
   ZPP_ASSERT(_p_font != nullptr, "Font not set");
+  const uint32_t color_value = color.argb();
 
   // compute the starting column
   uint32_t refcolumn = x_pos;
@@ -326,7 +326,7 @@ void Display::draw_string_at(Color color, uint32_t x_pos, uint32_t y_pos, const 
     }
 
     // Display one character on display
-    display_char(color, refcolumn, y_pos, c);
+    display_char(color_value, refcolumn, y_pos, c);
     // Increment the column position by the width
     refcolumn += char_width;
   }
@@ -336,7 +336,7 @@ uint32_t Display::compute_ypos_from_line_number(uint32_t line) const {
   return line * get_font()->height;
 }
 
-void Display::display_char(Color color,
+void Display::display_char(uint32_t color_value,
                            uint32_t x_pos,  // This is a private method and we always call it correctly
                            uint32_t y_pos,  // NOLINT(bugprone-easily-swappable-parameters)
                            uint32_t unicode) {
@@ -384,14 +384,14 @@ void Display::display_char(Color color,
         if (static_cast<bool>(line & bit_in_pixel)) {
           // char_width is asserted to be < 48, so j is always < 4
           // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index) -
-          argb8888[j] = get_color_value(color);
+          argb8888[j] = color_value;
         } else {
           // char_width is asserted to be < 48, so j is always < 4
           // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
           argb8888[j] = _background_color_value;
         }
       }
-      fill_rgb_rect(color, x_pos, y_pos++, argb8888, char_width, 1);  // NOLINT
+      fill_rgb_rect(x_pos, y_pos++, argb8888, char_width, 1);  // NOLINT
     } else {
       ZPP_LOG_ERR("Not implemented");
       ZPP_ASSERT(false, "Not implemented");
@@ -452,8 +452,7 @@ void Display::fill_line_rgb888(const uint32_t* p_src, size_t src_size, uint8_t* 
   // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
 }
 
-void Display::fill_rgb_rect(Color color,
-                            uint32_t x_pos,
+void Display::fill_rgb_rect(uint32_t x_pos,
                             uint32_t y_pos,
                             uint32_t* p_data,
                             uint32_t width,  // NOLINT(bugprone-easily-swappable-parameters) - this is a private

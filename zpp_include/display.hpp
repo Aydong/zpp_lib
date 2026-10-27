@@ -54,12 +54,52 @@ public:
   [[nodiscard]] uint32_t get_width() const;
   [[nodiscard]] uint32_t get_height() const;
   enum class Color : uint8_t { Black, White, Blue, Green };
-  void fill_display(Color color);
-  void set_background_color(Color color);
-  void fill_rectangle(Color color, uint32_t x_pos, uint32_t y_pos, uint32_t width, uint32_t height);
 
-  void draw_horizontal_line(Color color, uint32_t x_pos, uint32_t y_pos, uint32_t line_length, uint32_t thickness);
-  void draw_vertical_line(Color color, uint32_t x_pos, uint32_t y_pos, uint32_t line_length, uint32_t thickness);
+  // Color value stored in ARGB8888 format (0xAARRGGBB), independent of the display pixel format.
+  // It can be built from a predefined Color or from a raw ARGB/RGB value.
+  class Rgb {
+  public:
+    // Implicit conversion from Color is intended, so that existing calls using Color still compile
+    // NOLINTNEXTLINE(google-explicit-constructor, hicpp-explicit-conversions)
+    constexpr Rgb(Color color) : _argb(kColorTable[static_cast<uint8_t>(color)]) {}
+
+    // value in 0xAARRGGBB format
+    [[nodiscard]] static constexpr Rgb from_argb(uint32_t argb) {
+      return Rgb(argb);
+    }
+    // value in 0xRRGGBB format, the color is fully opaque
+    [[nodiscard]] static constexpr Rgb from_rgb(uint32_t rgb) {
+      return Rgb(kOpaque | (rgb & kRgbMask));
+    }
+    [[nodiscard]] static constexpr Rgb from_rgb(uint8_t red, uint8_t green, uint8_t blue) {
+      // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
+      return Rgb(kOpaque | (static_cast<uint32_t>(red) << 16) | (static_cast<uint32_t>(green) << 8) | blue);
+    }
+    [[nodiscard]] constexpr uint32_t argb() const {
+      return _argb;
+    }
+
+  private:
+    constexpr explicit Rgb(uint32_t argb) : _argb(argb) {}
+
+    static constexpr uint32_t kOpaque  = 0xFF000000;
+    static constexpr uint32_t kRgbMask = 0x00FFFFFF;
+
+    // Colors Black, White, Blue and Green in ARGB8888 format, indexed by Color
+    // Using a c-array to declare constans is acceptable and more efficient than using std::array,
+    // since the size of the array is known at compile time and does not require dynamic memory allocation.
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+    static constexpr uint32_t kColorTable[] = {0xFF000000, 0xFFFFFFFF, 0xFF0000FF, 0xFF00FF00};
+
+    uint32_t _argb;
+  };
+
+  void fill_display(Rgb color);
+  void set_background_color(Rgb color);
+  void fill_rectangle(Rgb color, uint32_t x_pos, uint32_t y_pos, uint32_t width, uint32_t height);
+
+  void draw_horizontal_line(Rgb color, uint32_t x_pos, uint32_t y_pos, uint32_t line_length, uint32_t thickness);
+  void draw_vertical_line(Rgb color, uint32_t x_pos, uint32_t y_pos, uint32_t line_length, uint32_t thickness);
   void draw_icon(uint16_t x_pos, uint16_t y_pos, const uint32_t* p_src, uint16_t logo_width, uint16_t logo_height);
   // type definitions for font
   // Character descriptor: {unicode, offset_in_table, width}
@@ -80,8 +120,8 @@ public:
   enum class AlignMode : uint8_t { Center = 0x01, Right = 0x02, Left = 0x03 };
   // returns the string length in pixels
   [[nodiscard]] uint16_t get_string_width(const std::string& text) const;
-  void draw_string_at_line(Color color, uint32_t line, const std::string& text, AlignMode mode);
-  void draw_string_at(Color color, uint32_t x_pos, uint32_t y_pos, const std::string& text);
+  void draw_string_at_line(Rgb color, uint32_t line, const std::string& text, AlignMode mode);
+  void draw_string_at(Rgb color, uint32_t x_pos, uint32_t y_pos, const std::string& text);
 
 private:
   // private methods
@@ -90,64 +130,16 @@ private:
   static void fill_line_argb8888(const uint32_t* p_src, size_t src_size, uint8_t* p_buffer);
   static void fill_line_rgb888(const uint32_t* p_src, size_t src_size, uint8_t* p_buffer);
   [[nodiscard]] uint32_t compute_ypos_from_line_number(uint32_t line) const;
-  void display_char(Color color, uint32_t x_pos, uint32_t y_pos, uint32_t unicode);
-  void fill_rgb_rect(Color color, uint32_t x_pos, uint32_t y_pos, uint32_t* p_data, uint32_t width, uint32_t height);
+  void display_char(uint32_t color_value, uint32_t x_pos, uint32_t y_pos, uint32_t unicode);
+  void fill_rgb_rect(uint32_t x_pos, uint32_t y_pos, uint32_t* p_data, uint32_t width, uint32_t height);
 
   // This function is implicitly inlined since it is defined in the class definition.
   [[nodiscard]] uint32_t get_pixel_format() const {
     return _display_capabilities.current_pixel_format;
   }
-  [[nodiscard]] uint32_t get_color_value(Color color) const {
-    switch (_display_capabilities.current_pixel_format) {
-    case PIXEL_FORMAT_ARGB_8888:
-      switch (color) {
-      case Color::Black:
-        return kARGB8888Colors[0];
-      case Color::White:
-        return kARGB8888Colors[1];
-      case Color::Blue:
-        return kARGB8888Colors[2];
-      case Color::Green:
-        return kARGB8888Colors[3];
-      default:
-        ZPP_ASSERT(false, "Unsupported color");
-        return kARGB8888Colors[0];
-      }
-      break;
-    case PIXEL_FORMAT_RGB_888: {
-      switch (color) {
-      case Color::Black:
-        return kRGB8888Colors[0];
-      case Color::White:
-        return kRGB8888Colors[1];
-      case Color::Blue:
-        return kRGB8888Colors[2];
-      case Color::Green:
-        return kRGB8888Colors[3];
-      default:
-        ZPP_ASSERT(false, "Unsupported color");
-        return kRGB8888Colors[0];
-      }
-      break;
-
-    default:
-      ZPP_ASSERT(false, "Unsupported pixel format");
-      return 0;
-    }
-    }
-  }
 
   // constants
   static constexpr uint32_t kHStep = 1;
-
-  // Colors Black, White, Blue and Green in different formats
-  // Colors in ARGB8888 format
-  // Using a c-array to declare constans is acceptable and more efficient than using std::array,
-  // since the size of the array is known at compile time and does not require dynamic memory allocation.
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-  static constexpr uint32_t kARGB8888Colors[] = {0xFF000000, 0xFFFFFFFF, 0xFF0000FF, 0xFF00FF00};
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-  static constexpr uint32_t kRGB8888Colors[] = {0x000000, 0xFFFFFF, 0x0000FF, 0x00FF00};
 
   // data members
   const struct device* _display_device                                       = nullptr;
@@ -160,7 +152,6 @@ private:
   uint32_t _lcd_xsize                                                        = 0;
   uint32_t _lcd_ysize                                                        = 0;
   size_t _line_buffer_size                                                   = 0;
-  Color _background_color                                                    = Color::Black;
   uint32_t _background_color_value                                           = 0;
   uint8_t* _line_buffer                                                      = nullptr;
   const Font* _p_font                                                        = nullptr;
